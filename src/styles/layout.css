@@ -1,0 +1,155 @@
+.app {
+      position: relative;
+      width: var(--frame-w);
+      height: var(--frame-h);
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+.screen {
+      position: absolute;
+      inset: 0;
+      display: none;
+      padding: 18px;
+      align-items: center;
+      justify-content: center;
+    }
+
+.screen.active { display: flex; }
+
+.panel {
+      width: 100%;
+      height: 100%;
+      max-width: 1320px;
+      max-height: 920px;
+      background: var(--panel);
+      border: 1px solid rgba(215,176,107,.42);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+.panel::before,
+    .panel::after {
+      content: '❦';
+      position: absolute;
+      color: rgba(215,176,107,.55);
+      font-size: 28px;
+      z-index: 0;
+    }
+
+.panel::before { top: 10px; left: 16px; }
+
+.panel::after { bottom: 10px; right: 16px; }
+
+.screen-inner {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      height: 100%;
+      padding: 22px;
+    }
+
+.home-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 18px;
+      height: 100%;
+    }
+
+.leaders-area {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      align-content: start;
+      overflow: hidden;
+    }
+
+.leaders-area.hidden { display: none; }
+
+.home-grid.leaders-hidden {
+      grid-template-columns: minmax(320px, 420px);
+      justify-content: center;
+    }
+
+.level-shell {
+      width: min(920px, 100%);
+      height: auto;
+      min-height: 520px;
+      display: grid;
+      align-content: center;
+      gap: 16px;
+    }
+
+.level-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+.game-layout {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      width: 100%;
+      height: 100%;
+    }
+
+.hud {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr 1fr auto;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+.hud-box {
+      border-radius: 16px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(215,176,107,.32);
+      text-align: center;
+    }
+
+.hud-box .label { font-size: 13px; opacity: .82; }
+
+.hud-box .value { font-size: 28px; color: var(--gold-soft); font-weight: 700; line-height: 1.15; }
+
+.play-grid {
+      display: grid;
+      grid-template-rows: 1fr 230px;
+      gap: 12px;
+      min-height: 0;
+    }
+
+.staff-card {
+      position: relative;
+      min-height: 0;
+      border-radius: 20px;
+      padding: 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border: 1px solid rgba(215,176,107,.30);
+      overflow: hidden;
+    }
+
+.keyboard-shell {
+      border-radius: 20px;
+      padding: 10px 10px 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border: 1px solid rgba(215,176,107,.30);
+      overflow: hidden;
+    }
+
+.piano-perspective {
+      width: 100%;
+      height: 100%;
+      transform: perspective(1200px) rotateX(22deg);
+      transform-origin: center top;
+      padding-top: 8px;
+    }
+
+.level-panel {
+  max-width: 980px;
+  max-height: 760px;
+  height: auto;
+}
