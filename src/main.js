@@ -1,5 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import { createScreenController } from './app/screens.js';
+import { buildNote, diatonicIndex, octaveLabelsRu, whiteStepsOrder } from './game/noteModel.js';
+import { getDomElements } from './ui/dom.js';
 
 const firebaseConfig = {
   apiKey: 'PASTE_YOUR_API_KEY',
@@ -43,11 +46,6 @@ const LEVELS = {
   },
 };
 
-const naturalMapRu = { C: 'до', D: 'ре', E: 'ми', F: 'фа', G: 'соль', A: 'ля', B: 'си' };
-const octaveLabelsRu = { 2: 'большая', 3: 'малая', 4: 'первая', 5: 'вторая', 6: 'третья' };
-const semitones = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
-const whiteStepsOrder = ['C','D','E','F','G','A','B'];
-const letterIndex = { C:0, D:1, E:2, F:3, G:4, A:5, B:6 };
 const sharpableSteps = new Set(['C', 'D', 'F', 'G', 'A']);
 const flattableSteps = new Set(['D', 'E', 'G', 'A', 'B']);
 const clefConfig = {
@@ -71,55 +69,10 @@ const state = {
   lastHardClef: 'bass',
 };
 
-const screens = {
-  splash: document.getElementById('splashScreen'),
-  home: document.getElementById('homeScreen'),
-  level: document.getElementById('levelScreen'),
-  game: document.getElementById('gameScreen'),
-};
-
-const els = {
-  homeGrid: document.getElementById('homeGrid'),
-  leadersArea: document.getElementById('leadersArea'),
-  playerName: document.getElementById('playerName'),
-  startBtn: document.getElementById('startBtn'),
-  loadLeadersBtn: document.getElementById('loadLeadersBtn'),
-  clearLocalBtn: document.getElementById('clearLocalBtn'),
-  statusLine: document.getElementById('statusLine'),
-  backHomeBtn: document.getElementById('backHomeBtn'),
-  hudPlayer: document.getElementById('hudPlayer'),
-  hudLevel: document.getElementById('hudLevel'),
-  hudTime: document.getElementById('hudTime'),
-  hudScore: document.getElementById('hudScore'),
-  gameExitBtn: document.getElementById('gameExitBtn'),
-  countdown: document.getElementById('countdown'),
-  keyboard: document.getElementById('keyboard'),
-  hintLine: document.getElementById('hintLine'),
-  resultOverlay: document.getElementById('resultOverlay'),
-  resultText: document.getElementById('resultText'),
-  resultOkBtn: document.getElementById('resultOkBtn'),
-  postGameOverlay: document.getElementById('postGameOverlay'),
-  playAgainBtn: document.getElementById('playAgainBtn'),
-  exitBtn: document.getElementById('exitBtn'),
-  canvas: document.getElementById('staffCanvas'),
-  leaderBodies: {
-    easiest: document.getElementById('leaders-easiest'),
-    easy: document.getElementById('leaders-easy'),
-    medium: document.getElementById('leaders-medium'),
-    hard: document.getElementById('leaders-hard'),
-  }
-};
+const { screens, els } = getDomElements();
+const screenController = createScreenController(screens);
 
 const ctx = els.canvas.getContext('2d');
-
-function diatonicIndex(step, octave) {
-  return octave * 7 + letterIndex[step];
-}
-
-function switchScreen(name) {
-  Object.values(screens).forEach(screen => screen.classList.remove('active'));
-  screens[name].classList.add('active');
-}
 
 function setStatus(text = '') {
   els.statusLine.textContent = text;
@@ -246,37 +199,6 @@ async function saveResult(result) {
   } catch (error) {
     console.error('Firebase save error:', error);
   }
-}
-
-function buildNote(step, accidental, octave, clef) {
-  let midi = 12 * (octave + 1) + semitones[step];
-  if (accidental === '#') midi += 1;
-  if (accidental === 'b') midi -= 1;
-  return {
-    id: `${clef}-${step}${accidental || ''}${octave}`,
-    step,
-    accidental,
-    octave,
-    midi,
-    clef,
-    labelRu: buildRuLabel(step, accidental),
-    noteIndex: diatonicIndex(step, octave),
-  };
-}
-
-function buildRuLabel(step, accidental) {
-  const base = naturalMapRu[step];
-  if (accidental === '#') return `${base}♯`;
-  if (accidental === 'b') return `${base}♭`;
-  if (accidental === 'n') return `${base}♮`;
-  return base;
-}
-
-function midiValue(step, accidental, octave) {
-  let midi = 12 * (octave + 1) + semitones[step];
-  if (accidental === '#') midi += 1;
-  if (accidental === 'b') midi -= 1;
-  return midi;
 }
 
 function comparePitch(aStep, aOct, bStep, bOct) {
@@ -598,7 +520,7 @@ async function startGame(levelKey) {
   state.questionQueue = [];
   clearKeyFeedback();
   updateHud();
-  switchScreen('game');
+  screenController.show('game');
   drawStaff(null);
   renderHint();
   await startCountdown();
@@ -647,7 +569,7 @@ function exitToHome() {
   stopCurrentGame();
   els.resultOverlay.style.display = 'none';
   els.postGameOverlay.style.display = 'none';
-  switchScreen('home');
+  screenController.show('home');
 }
 
 function bindEvents() {
@@ -659,14 +581,14 @@ function bindEvents() {
     }
     state.playerName = name;
     setStatus('');
-    switchScreen('level');
+    screenController.show('level');
   });
 
-  document.querySelectorAll('.level-card').forEach(card => {
+  els.levelCards.forEach(card => {
     card.addEventListener('click', () => startGame(card.dataset.level));
   });
 
-  els.backHomeBtn.addEventListener('click', () => switchScreen('home'));
+  els.backHomeBtn.addEventListener('click', () => screenController.show('home'));
   els.loadLeadersBtn.addEventListener('click', syncFromFirebase);
   els.clearLocalBtn.addEventListener('click', () => {
     state.leaders = [];
@@ -682,13 +604,13 @@ function bindEvents() {
   });
   els.playAgainBtn.addEventListener('click', () => {
     els.postGameOverlay.style.display = 'none';
-    switchScreen('level');
+    screenController.show('level');
   });
   els.exitBtn.addEventListener('click', exitToHome);
 }
 
 function initSplash() {
-  setTimeout(() => switchScreen('home'), SPLASH_TOTAL_MS);
+  setTimeout(() => screenController.show('home'), SPLASH_TOTAL_MS);
 }
 
 function init() {

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest --pool=threads"
   },
   "devDependencies": {
     "vitest": "^4.0.0"
