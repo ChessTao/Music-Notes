@@ -1,4 +1,6 @@
 node_modules/
+.env
+.runtime/
 ARCHITECTURE_INSTRUCTIONS.md
 ARCHITECTURE_PLAN.md
 UPDATE_SITE.md

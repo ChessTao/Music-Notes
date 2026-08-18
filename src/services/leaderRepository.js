@@ -41,7 +41,7 @@ export function createLeaderRepository({ localStore, remoteStore, levels }) {
     }
 
     try {
-      await remoteStore.save(normalized);
+      await remoteStore.save({ ...result, ...normalized });
       return { leaders: getLocal(), remote: 'saved', accepted: true };
     } catch (error) {
       console.warn('Remote leaderboard save failed:', error);

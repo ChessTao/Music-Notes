@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4173
+      COOKIE_SECURE: "false"
+      DATABASE_URL: postgres://music_notes:music_notes_password@postgres:5432/music_notes
+    ports:
+      - "4173:4173"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: music_notes
+      POSTGRES_PASSWORD: music_notes_password
+      POSTGRES_DB: music_notes
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

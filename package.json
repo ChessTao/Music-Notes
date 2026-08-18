@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "node server.mjs",
     "preview": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "npm test",
+    "online-smoke": "node scripts/online-smoke.mjs",
     "test": "vitest --pool=threads"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "vitest": "^4.0.0"

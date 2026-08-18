@@ -65,6 +65,12 @@
 
 .field:focus { box-shadow: 0 0 0 3px rgba(215,176,107,.16); }
 
+.auth-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
 .button {
       cursor: pointer;
       font-weight: 700;
@@ -93,6 +99,8 @@
 .stack { display: grid; gap: 12px; }
 
 .tiny { font-size: 14px; opacity: .88; }
+
+.hidden { display: none !important; }
 
 .leaders-card {
       min-height: 0;

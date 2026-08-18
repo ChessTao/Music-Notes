@@ -26,9 +26,16 @@
             <div class="card stack">
               <h1 class="section-title">Начало игры</h1>
               <input id="playerName" class="field" type="text" maxlength="20" placeholder="Введите имя" />
+              <input id="playerPassword" class="field" type="password" maxlength="128" placeholder="Пароль для онлайн-профиля" />
+              <div class="auth-buttons">
+                <button id="loginBtn" class="button secondary">Войти</button>
+                <button id="registerBtn" class="button secondary">Регистрация</button>
+              </div>
+              <button id="logoutBtn" class="button secondary hidden">Выйти из профиля</button>
               <button id="startBtn" class="button gold">Начать игру</button>
               <button id="loadLeadersBtn" class="button secondary">Таблица лидеров</button>
               <button id="clearLocalBtn" class="button red">Очистить локальную таблицу</button>
+              <div id="authState" class="tiny"></div>
               <div id="statusLine" class="tiny"></div>
             </div>
           </div>
