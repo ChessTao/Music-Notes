@@ -1,6 +1,8 @@
 node_modules/
 .env
 .runtime/
+.firebase/
+firebase-debug.log
 ARCHITECTURE_INSTRUCTIONS.md
 ARCHITECTURE_PLAN.md
 UPDATE_SITE.md

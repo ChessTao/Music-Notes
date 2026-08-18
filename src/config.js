@@ -6,10 +6,10 @@ export const gameConfig = {
 };
 
 export const firebaseConfig = {
-  apiKey: 'PASTE_YOUR_API_KEY',
-  authDomain: 'PASTE_YOUR_AUTH_DOMAIN',
-  projectId: 'PASTE_YOUR_PROJECT_ID',
-  storageBucket: 'PASTE_YOUR_STORAGE_BUCKET',
-  messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID',
-  appId: 'PASTE_YOUR_APP_ID',
+  apiKey: "AIzaSyDUrcA2k_Zu2QzdqXqZIxv7Kto_v0WGWPI",
+  authDomain: "music-notes-e2164.firebaseapp.com",
+  projectId: "music-notes-e2164",
+  storageBucket: "music-notes-e2164.firebasestorage.app",
+  messagingSenderId: "732111610296",
+  appId: "1:732111610296:web:b015c7a1344afd18136f4d"
 };
