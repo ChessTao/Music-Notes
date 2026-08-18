@@ -93,7 +93,6 @@ function setUser(user) {
   if (state.user) {
     state.playerName = state.user.displayName;
     els.playerName.value = state.user.displayName;
-    els.playerEmail.value = state.user.email || '';
   }
   updateAuthUi();
 }
@@ -292,35 +291,34 @@ function exitToHome() {
 
 async function authenticate(mode) {
   const name = normalizePlayerName(els.playerName.value);
-  const email = els.playerEmail.value.trim();
   const password = els.playerPassword.value;
 
   if (!firebaseClient.isReady()) {
     setStatus('Сначала вставьте Firebase config в src/config.js.');
     return;
   }
-  if (mode === 'register' && !name) {
-    setStatus('Введите имя для регистрации.');
+  if (!name) {
+    setStatus('Введите имя.');
     return;
   }
-  if (!email || password.length < 6) {
-    setStatus('Введите email и пароль не короче 6 символов.');
+  if (password.length < 6) {
+    setStatus('Введите пароль не короче 6 символов.');
     return;
   }
 
   try {
     const result = mode === 'register'
-      ? await firebaseClient.register({ name, email, password })
-      : await firebaseClient.login({ email, password });
+      ? await firebaseClient.register({ name, password })
+      : await firebaseClient.login({ name, password });
     setUser(result.user);
     els.playerPassword.value = '';
     setStatus(mode === 'register' ? 'Профиль создан.' : 'Вы вошли в профиль.');
     await syncLeaderboard();
   } catch (error) {
     const messages = {
-      'auth/email-already-in-use': 'Этот email уже зарегистрирован.',
-      'auth/invalid-credential': 'Неверный email или пароль.',
-      'auth/invalid-email': 'Введите корректный email.',
+      'auth/email-already-in-use': 'Это имя уже зарегистрировано.',
+      'auth/invalid-credential': 'Неверное имя или пароль.',
+      'auth/invalid-email': 'Введите другое имя.',
       'auth/weak-password': 'Пароль слишком простой.',
     };
     setStatus(messages[error.code] || 'Не удалось выполнить вход.');

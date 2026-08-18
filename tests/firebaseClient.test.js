@@ -28,6 +28,14 @@ vi.mock('https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js', () =>
 }));
 
 describe('firebaseClient', () => {
+  it('builds stable hidden auth emails from player names', async () => {
+    const { createTechnicalEmail } = await import('../src/services/firebaseClient.js');
+
+    expect(createTechnicalEmail('Валерий')).toBe(createTechnicalEmail('  валерий  '));
+    expect(createTechnicalEmail('Валерий')).toMatch(/^user-[a-z0-9]+@music-notes-e2164\.firebaseapp\.com$/);
+    expect(createTechnicalEmail('Анна')).not.toBe(createTechnicalEmail('Валерий'));
+  });
+
   it('stays disabled until Firebase config is provided', async () => {
     const { createFirebaseClient } = await import('../src/services/firebaseClient.js');
     const client = createFirebaseClient({

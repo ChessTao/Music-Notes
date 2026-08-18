@@ -38,6 +38,18 @@ function publicUser(user) {
   };
 }
 
+export function createTechnicalEmail(name) {
+  const normalized = normalizePlayerName(name).toLocaleLowerCase('ru-RU');
+  let hash = 2166136261;
+
+  for (const char of normalized) {
+    hash ^= char.codePointAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `user-${(hash >>> 0).toString(36)}@music-notes-e2164.firebaseapp.com`;
+}
+
 export function createFirebaseClient(firebaseConfig, { perLevelLimit = 5 } = {}) {
   if (!isFirebaseConfigReady(firebaseConfig)) {
     return {
@@ -78,7 +90,8 @@ export function createFirebaseClient(firebaseConfig, { perLevelLimit = 5 } = {})
     }, { merge: true });
   }
 
-  async function register({ name, email, password }) {
+  async function register({ name, password }) {
+    const email = createTechnicalEmail(name);
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     const displayName = normalizePlayerName(name);
     await updateProfile(credential.user, { displayName });
@@ -86,7 +99,8 @@ export function createFirebaseClient(firebaseConfig, { perLevelLimit = 5 } = {})
     return { user: publicUser(credential.user) };
   }
 
-  async function login({ email, password }) {
+  async function login({ name, password }) {
+    const email = createTechnicalEmail(name);
     const credential = await signInWithEmailAndPassword(auth, email, password);
     await upsertUserProfile(credential.user, credential.user.displayName);
     return { user: publicUser(credential.user) };
