@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node server.mjs",
+    "preview": "node server.mjs",
     "test": "vitest --pool=threads"
   },
   "devDependencies": {

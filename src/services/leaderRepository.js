@@ -1,7 +1,8 @@
 import { sortLeaders } from './localLeaders.js';
+import { normalizeLeaderList, normalizeLeaderResult } from './leaderValidation.js';
 
-export function createLeaderRepository({ localStore, remoteStore }) {
-  let leaders = sortLeaders(localStore.load());
+export function createLeaderRepository({ localStore, remoteStore, levels }) {
+  let leaders = sortLeaders(normalizeLeaderList(localStore.load(), levels));
 
   function persistLocal() {
     localStore.save(leaders);
@@ -13,23 +14,39 @@ export function createLeaderRepository({ localStore, remoteStore }) {
 
   async function getTop({ syncRemote = false } = {}) {
     if (syncRemote && remoteStore?.isReady()) {
-      leaders = sortLeaders(await remoteStore.load());
-      persistLocal();
-      return { leaders: getLocal(), source: 'remote' };
+      try {
+        leaders = sortLeaders(normalizeLeaderList(await remoteStore.load(), levels));
+        persistLocal();
+        return { leaders: getLocal(), source: 'remote' };
+      } catch (error) {
+        console.warn('Remote leaderboard load failed:', error);
+        return { leaders: getLocal(), source: 'local', remoteError: error };
+      }
     }
 
     return { leaders: getLocal(), source: 'local' };
   }
 
   async function save(result) {
-    leaders = sortLeaders([...leaders, result]);
-    persistLocal();
-
-    if (remoteStore?.isReady()) {
-      await remoteStore.save(result);
+    const normalized = normalizeLeaderResult(result, levels);
+    if (!normalized) {
+      return { leaders: getLocal(), remote: 'skipped', accepted: false };
     }
 
-    return getLocal();
+    leaders = sortLeaders([...leaders, normalized]);
+    persistLocal();
+
+    if (!remoteStore?.isReady()) {
+      return { leaders: getLocal(), remote: 'skipped', accepted: true };
+    }
+
+    try {
+      await remoteStore.save(normalized);
+      return { leaders: getLocal(), remote: 'saved', accepted: true };
+    } catch (error) {
+      console.warn('Remote leaderboard save failed:', error);
+      return { leaders: getLocal(), remote: 'failed', accepted: true, remoteError: error };
+    }
   }
 
   function clearLocal() {

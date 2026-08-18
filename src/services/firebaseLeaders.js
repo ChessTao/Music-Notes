@@ -1,11 +1,26 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
 
-export function createFirebaseLeaderStore(firebaseConfig, collectionName, levels) {
-  const configReady = Object.values(firebaseConfig).every(v => v && !String(v).startsWith('PASTE_'));
+import { normalizeLeaderResult } from './leaderValidation.js';
+
+export function isFirebaseConfigReady(firebaseConfig) {
+  return Object.values(firebaseConfig).every(v => v && !String(v).startsWith('PASTE_'));
+}
+
+export function createFirebaseLeaderStore(firebaseConfig, collectionName, levels, { perLevelLimit = 5 } = {}) {
   let db = null;
 
-  if (configReady) {
+  if (isFirebaseConfigReady(firebaseConfig)) {
     try {
       const app = initializeApp(firebaseConfig);
       db = getFirestore(app);
@@ -18,26 +33,45 @@ export function createFirebaseLeaderStore(firebaseConfig, collectionName, levels
     return Boolean(db);
   }
 
-  async function load() {
-    const q = query(collection(db, collectionName), orderBy('level', 'asc'), orderBy('score', 'desc'), orderBy('date', 'asc'), limit(200));
+  function fromFirestore(data) {
+    return normalizeLeaderResult({
+      name: data.name || 'Без имени',
+      score: Number(data.score || 0),
+      date: data.date || new Date().toISOString(),
+      level: data.level,
+    }, levels);
+  }
+
+  async function loadLevel(levelKey) {
+    const q = query(
+      collection(db, collectionName),
+      where('level', '==', levelKey),
+      orderBy('score', 'desc'),
+      orderBy('date', 'asc'),
+      limit(perLevelLimit),
+    );
     const snap = await getDocs(q);
     const loaded = [];
     snap.forEach(doc => {
-      const data = doc.data();
-      if (!levels[data.level]) return;
-      loaded.push({
-        name: data.name || 'Без имени',
-        score: Number(data.score || 0),
-        date: data.date || new Date().toISOString(),
-        level: data.level,
-      });
+      const result = fromFirestore(doc.data());
+      if (result) loaded.push(result);
     });
     return loaded;
   }
 
+  async function load() {
+    const groups = await Promise.all(Object.keys(levels).map(loadLevel));
+    return groups.flat();
+  }
+
   async function save(result) {
+    const normalized = normalizeLeaderResult(result, levels);
+    if (!normalized) {
+      throw new Error('Invalid leaderboard result.');
+    }
+
     await addDoc(collection(db, collectionName), {
-      ...result,
+      ...normalized,
       createdAt: serverTimestamp(),
     });
   }

@@ -54,7 +54,7 @@ export const LEVELS = {
   },
   hard: {
     key: 'hard',
-    title: 'Четвёртый',
+    title: 'Четвертый',
     hints: false,
     mode: 'press-key-by-staff-note',
     clefs: ['treble', 'bass'],

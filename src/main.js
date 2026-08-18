@@ -1,10 +1,12 @@
-﻿import { createScreenController } from './app/screens.js';
+import { createScreenController } from './app/screens.js';
 import { startCountdown as startCountdownTimer, startRoundTimer } from './app/timers.js';
+import { firebaseConfig, gameConfig } from './config.js';
 import { createGameEngine } from './game/gameEngine.js';
 import { LEVELS, buildPoolForLevel } from './game/levels.js';
 import { createFirebaseLeaderStore } from './services/firebaseLeaders.js';
 import { createLeaderRepository } from './services/leaderRepository.js';
 import { createBrowserLocalLeaderStore } from './services/localLeaders.js';
+import { normalizePlayerName } from './services/leaderValidation.js';
 import { playNote } from './services/sound.js';
 import { getDomElements } from './ui/dom.js';
 import { renderHint as renderHintElement } from './ui/hints.js';
@@ -13,38 +15,27 @@ import { renderLeaders as renderLeadersView } from './ui/leadersView.js';
 import { createModalController } from './ui/modals.js';
 import { createStaffRenderer } from './ui/staffCanvas.js';
 
-const firebaseConfig = {
-  apiKey: 'PASTE_YOUR_API_KEY',
-  authDomain: 'PASTE_YOUR_AUTH_DOMAIN',
-  projectId: 'PASTE_YOUR_PROJECT_ID',
-  storageBucket: 'PASTE_YOUR_STORAGE_BUCKET',
-  messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID',
-  appId: 'PASTE_YOUR_APP_ID'
-};
-
-const STORAGE_KEY = 'learn-notes-leaders-v5';
-const FIRESTORE_COLLECTION = 'leaders';
-const SPLASH_TOTAL_MS = 6000;
-const ROUND_SECONDS = 60;
-const COUNTDOWN_SECONDS = 3;
-
-const localLeaderStore = createBrowserLocalLeaderStore(STORAGE_KEY);
-const firebaseLeaderStore = createFirebaseLeaderStore(firebaseConfig, FIRESTORE_COLLECTION, LEVELS);
+const localLeaderStore = createBrowserLocalLeaderStore(gameConfig.storageKey);
+const firebaseLeaderStore = createFirebaseLeaderStore(firebaseConfig, gameConfig.firestoreCollection, LEVELS);
 const leaderRepository = createLeaderRepository({
   localStore: localLeaderStore,
   remoteStore: firebaseLeaderStore,
+  levels: LEVELS,
 });
 
 const state = {
   playerName: '',
   selectedLevel: null,
   score: 0,
-  timeLeft: ROUND_SECONDS,
+  timeLeft: gameConfig.roundSeconds,
   currentNote: null,
   leaders: leaderRepository.getLocal(),
   roundTimerId: null,
   countdownId: null,
+  countdownCancel: null,
   isPlaying: false,
+  isStarting: false,
+  isFinishing: false,
   questionQueue: [],
   lastHardClef: 'bass',
 };
@@ -81,22 +72,32 @@ function renderLeaders() {
 
 async function syncFromFirebase() {
   setLeadersVisible(true);
-  try {
-    const result = await leaderRepository.getTop({ syncRemote: true });
-    state.leaders = result.leaders;
-    renderLeaders();
-    setStatus(result.source === 'remote' ? 'Таблица лидеров обновлена.' : 'Показаны локальные результаты.');
-  } catch (error) {
-    console.error(error);
-    state.leaders = leaderRepository.getLocal();
-    renderLeaders();
-    setStatus('Не удалось обновить таблицу лидеров. Показаны локальные результаты.');
+  const result = await leaderRepository.getTop({ syncRemote: true });
+  state.leaders = result.leaders;
+  renderLeaders();
+
+  if (result.source === 'remote') {
+    setStatus('Таблица лидеров обновлена.');
+    return;
   }
+
+  setStatus(result.remoteError
+    ? 'Не удалось обновить таблицу лидеров. Показаны локальные результаты.'
+    : 'Показаны локальные результаты.');
 }
 
 async function saveResult(result) {
-  state.leaders = await leaderRepository.save(result);
+  const saveState = await leaderRepository.save(result);
+  state.leaders = saveState.leaders;
   renderLeaders();
+
+  if (!saveState.accepted) {
+    setStatus('Результат не сохранен: данные игры не прошли проверку.');
+  } else if (saveState.remote === 'failed') {
+    setStatus('Результат сохранен локально. Онлайн-таблица временно недоступна.');
+  } else if (saveState.remote === 'saved') {
+    setStatus('Результат сохранен в онлайн-таблице.');
+  }
 }
 
 function nextNote() {
@@ -142,39 +143,60 @@ function handleKeyPress(midi, element) {
 }
 
 function updateHud() {
-  els.hudPlayer.textContent = state.playerName || 'вЂ”';
-  els.hudLevel.textContent = LEVELS[state.selectedLevel]?.title || 'вЂ”';
+  els.hudPlayer.textContent = state.playerName || '—';
+  els.hudLevel.textContent = LEVELS[state.selectedLevel]?.title || '—';
   els.hudTime.textContent = String(state.timeLeft);
   els.hudScore.textContent = String(state.score);
+}
+
+function stopCountdown() {
+  state.countdownId?.stop();
+  state.countdownId = null;
+  state.countdownCancel?.();
+  state.countdownCancel = null;
+  els.countdown.style.display = 'none';
 }
 
 function stopCurrentGame() {
   gameEngine.stopRound();
   syncEngineState();
   state.roundTimerId?.stop();
-  state.countdownId?.stop();
   state.roundTimerId = null;
-  state.countdownId = null;
+  stopCountdown();
   keyboardController.clearFeedback();
-  state.timeLeft = ROUND_SECONDS;
+  state.timeLeft = gameConfig.roundSeconds;
+  state.isStarting = false;
   drawStaff(null);
   renderHint();
+  updateHud();
 }
 
 async function startGame(levelKey) {
+  if (state.isStarting || state.isPlaying) return;
+  if (!LEVELS[levelKey]) {
+    setStatus('Выбран неизвестный уровень.');
+    return;
+  }
+
+  state.isStarting = true;
+  state.isFinishing = false;
   gameEngine.startRound(levelKey, { lastHardClef: state.lastHardClef });
   syncEngineState();
-  state.timeLeft = ROUND_SECONDS;
+  state.timeLeft = gameConfig.roundSeconds;
   keyboardController.clearFeedback();
   updateHud();
   screenController.show('game');
   drawStaff(null);
   renderHint();
-  await startCountdown();
+
+  const completed = await startCountdown();
+  if (!completed) return;
+
   gameEngine.startAnswering();
   syncEngineState();
+  state.isStarting = false;
   nextNote();
-  state.roundTimerId = startRoundTimer(ROUND_SECONDS, timeLeft => {
+  state.roundTimerId = startRoundTimer(gameConfig.roundSeconds, timeLeft => {
     state.timeLeft = timeLeft;
     updateHud();
   }, finishGame);
@@ -183,30 +205,44 @@ async function startGame(levelKey) {
 function startCountdown() {
   return new Promise(resolve => {
     els.countdown.style.display = 'flex';
+    let settled = false;
+    state.countdownCancel = () => {
+      if (settled) return;
+      settled = true;
+      resolve(false);
+    };
     state.countdownId = startCountdownTimer(
-      COUNTDOWN_SECONDS,
+      gameConfig.countdownSeconds,
       left => {
         els.countdown.textContent = String(left);
       },
       () => {
+        if (settled) return;
+        settled = true;
         state.countdownId = null;
+        state.countdownCancel = null;
         els.countdown.style.display = 'none';
-        resolve();
+        resolve(true);
       },
     );
   });
 }
 
 async function finishGame() {
-  stopCurrentGame();
+  if (state.isFinishing) return;
+  state.isFinishing = true;
+
   const result = {
     name: state.playerName,
     score: state.score,
     date: new Date().toISOString(),
     level: state.selectedLevel,
   };
+
+  stopCurrentGame();
   await saveResult(result);
-  modals.showResult(state.score);
+  modals.showResult(result.score);
+  state.isFinishing = false;
 }
 
 function exitToHome() {
@@ -218,12 +254,13 @@ function exitToHome() {
 
 function bindEvents() {
   els.startBtn.addEventListener('click', () => {
-    const name = els.playerName.value.trim();
+    const name = normalizePlayerName(els.playerName.value);
     if (!name) {
-      setStatus('Р’РІРµРґРёС‚Рµ РёРјСЏ РїРµСЂРµРґ РЅР°С‡Р°Р»РѕРј РёРіСЂС‹.');
+      setStatus('Введите имя перед началом игры.');
       return;
     }
     state.playerName = name;
+    els.playerName.value = name;
     setStatus('');
     screenController.show('level');
   });
@@ -238,7 +275,7 @@ function bindEvents() {
     state.leaders = leaderRepository.clearLocal();
     renderLeaders();
     setLeadersVisible(true);
-    setStatus('РўР°Р±Р»РёС†Р° Р»РёРґРµСЂРѕРІ РѕС‡РёС‰РµРЅР°.');
+    setStatus('Таблица лидеров очищена.');
   });
   els.gameExitBtn.addEventListener('click', exitToHome);
   els.resultOkBtn.addEventListener('click', () => {
@@ -253,7 +290,7 @@ function bindEvents() {
 }
 
 function initSplash() {
-  setTimeout(() => screenController.show('home'), SPLASH_TOTAL_MS);
+  setTimeout(() => screenController.show('home'), gameConfig.splashTotalMs);
 }
 
 function init() {
@@ -261,6 +298,7 @@ function init() {
   setLeadersVisible(false);
   keyboardController.render();
   drawStaff(null);
+  updateHud();
   bindEvents();
   initSplash();
 }
