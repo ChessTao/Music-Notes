@@ -1,13 +1,13 @@
 import { createScreenController } from './app/screens.js';
 import { startCountdown as startCountdownTimer, startRoundTimer } from './app/timers.js';
-import { gameConfig } from './config.js';
+import { firebaseConfig, gameConfig } from './config.js';
 import { createGameEngine } from './game/gameEngine.js';
 import { LEVELS, buildPoolForLevel } from './game/levels.js';
-import { createApiClient } from './services/apiClient.js';
+import { createFirebaseClient } from './services/firebaseClient.js';
+import { createFirebaseLeaderStore } from './services/firebaseLeaders.js';
 import { createLeaderRepository } from './services/leaderRepository.js';
 import { createBrowserLocalLeaderStore } from './services/localLeaders.js';
 import { normalizePlayerName } from './services/leaderValidation.js';
-import { createServerLeaderStore } from './services/serverLeaders.js';
 import { playNote } from './services/sound.js';
 import { getDomElements } from './ui/dom.js';
 import { renderHint as renderHintElement } from './ui/hints.js';
@@ -16,12 +16,12 @@ import { renderLeaders as renderLeadersView } from './ui/leadersView.js';
 import { createModalController } from './ui/modals.js';
 import { createStaffRenderer } from './ui/staffCanvas.js';
 
-const apiClient = createApiClient();
+const firebaseClient = createFirebaseClient(firebaseConfig);
 const localLeaderStore = createBrowserLocalLeaderStore(gameConfig.storageKey);
-const serverLeaderStore = createServerLeaderStore(apiClient);
+const firebaseLeaderStore = createFirebaseLeaderStore(firebaseClient);
 const leaderRepository = createLeaderRepository({
   localStore: localLeaderStore,
-  remoteStore: serverLeaderStore,
+  remoteStore: firebaseLeaderStore,
   levels: LEVELS,
 });
 
@@ -76,22 +76,24 @@ function renderLeaders() {
 }
 
 function updateAuthUi() {
+  if (!firebaseClient.isReady()) {
+    els.authState.textContent = 'Firebase пока не настроен. Игра работает с локальными результатами.';
+    els.logoutBtn.classList.add('hidden');
+    return;
+  }
+
   els.authState.textContent = state.user
     ? `Профиль: ${state.user.displayName}`
     : 'Войдите или зарегистрируйтесь, чтобы сохранять результаты онлайн.';
   els.logoutBtn.classList.toggle('hidden', !state.user);
 }
 
-async function syncSession() {
-  try {
-    const session = await apiClient.getSession();
-    state.user = session.user || null;
-    if (state.user) {
-      state.playerName = state.user.displayName;
-      els.playerName.value = state.user.displayName;
-    }
-  } catch {
-    state.user = null;
+function setUser(user) {
+  state.user = user || null;
+  if (state.user) {
+    state.playerName = state.user.displayName;
+    els.playerName.value = state.user.displayName;
+    els.playerEmail.value = state.user.email || '';
   }
   updateAuthUi();
 }
@@ -103,12 +105,12 @@ async function syncLeaderboard() {
   renderLeaders();
 
   if (result.source === 'remote') {
-    setStatus('Таблица лидеров обновлена с сервера.');
+    setStatus('Таблица лидеров обновлена из Firebase.');
     return;
   }
 
   setStatus(result.remoteError
-    ? 'Сервер временно недоступен. Показаны локальные результаты.'
+    ? 'Firebase временно недоступен. Показаны локальные результаты.'
     : 'Показаны локальные результаты.');
 }
 
@@ -120,9 +122,9 @@ async function saveResult(result) {
   if (!saveState.accepted) {
     setStatus('Результат не сохранен: данные игры не прошли проверку.');
   } else if (saveState.remote === 'failed') {
-    setStatus('Результат сохранен локально. Сервер временно недоступен.');
+    setStatus('Результат сохранен локально. Firebase временно недоступен.');
   } else if (saveState.remote === 'saved') {
-    setStatus('Результат сохранен на сервере.');
+    setStatus('Результат сохранен в Firebase.');
   } else if (!state.user) {
     setStatus('Результат сохранен локально. Войдите, чтобы сохранять результаты онлайн.');
   }
@@ -290,30 +292,38 @@ function exitToHome() {
 
 async function authenticate(mode) {
   const name = normalizePlayerName(els.playerName.value);
+  const email = els.playerEmail.value.trim();
   const password = els.playerPassword.value;
-  if (!name || password.length < 6) {
-    setStatus('Введите имя и пароль не короче 6 символов.');
+
+  if (!firebaseClient.isReady()) {
+    setStatus('Сначала вставьте Firebase config в src/config.js.');
+    return;
+  }
+  if (mode === 'register' && !name) {
+    setStatus('Введите имя для регистрации.');
+    return;
+  }
+  if (!email || password.length < 6) {
+    setStatus('Введите email и пароль не короче 6 символов.');
     return;
   }
 
   try {
     const result = mode === 'register'
-      ? await apiClient.register({ name, password })
-      : await apiClient.login({ name, password });
-    state.user = result.user;
-    state.playerName = result.user.displayName;
-    els.playerName.value = result.user.displayName;
+      ? await firebaseClient.register({ name, email, password })
+      : await firebaseClient.login({ email, password });
+    setUser(result.user);
     els.playerPassword.value = '';
-    updateAuthUi();
     setStatus(mode === 'register' ? 'Профиль создан.' : 'Вы вошли в профиль.');
     await syncLeaderboard();
   } catch (error) {
     const messages = {
-      name_taken: 'Такое имя уже занято.',
-      invalid_credentials: 'Неверное имя или пароль.',
-      invalid_registration: 'Проверьте имя и пароль.',
+      'auth/email-already-in-use': 'Этот email уже зарегистрирован.',
+      'auth/invalid-credential': 'Неверный email или пароль.',
+      'auth/invalid-email': 'Введите корректный email.',
+      'auth/weak-password': 'Пароль слишком простой.',
     };
-    setStatus(messages[error.data?.error] || 'Не удалось выполнить вход.');
+    setStatus(messages[error.code] || 'Не удалось выполнить вход.');
   }
 }
 
@@ -333,9 +343,8 @@ function bindEvents() {
   els.registerBtn.addEventListener('click', () => authenticate('register'));
   els.loginBtn.addEventListener('click', () => authenticate('login'));
   els.logoutBtn.addEventListener('click', async () => {
-    await apiClient.logout();
-    state.user = null;
-    updateAuthUi();
+    await firebaseClient.logout();
+    setUser(null);
     setStatus('Вы вышли из профиля.');
   });
 
@@ -367,7 +376,7 @@ function initSplash() {
   setTimeout(() => screenController.show('home'), gameConfig.splashTotalMs);
 }
 
-async function init() {
+function init() {
   renderLeaders();
   setLeadersVisible(false);
   keyboardController.render();
@@ -375,9 +384,10 @@ async function init() {
   updateHud();
   updateAuthUi();
   bindEvents();
-  await syncSession();
-  await syncLeaderboard();
-  setLeadersVisible(false);
+  firebaseClient.onAuthChange(user => {
+    setUser(user);
+    if (user) syncLeaderboard();
+  });
   initSplash();
 }
 

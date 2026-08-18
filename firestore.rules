@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validLevel(level) {
+      return level in ['easiest', 'easy', 'medium', 'hard'];
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'displayName',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 20;
+      allow delete: if false;
+    }
+
+    match /leaders/{entryId} {
+      allow read: if true;
+      allow update, delete: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'name',
+          'score',
+          'date',
+          'level',
+          'durationMs',
+          'correctAnswers',
+          'totalAnswers',
+          'createdAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 20
+        && request.resource.data.score is int
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 240
+        && request.resource.data.correctAnswers == request.resource.data.score
+        && request.resource.data.totalAnswers >= request.resource.data.correctAnswers
+        && request.resource.data.durationMs >= 1000
+        && request.resource.data.durationMs <= 90000
+        && request.resource.data.date is string
+        && validLevel(request.resource.data.level)
+        && request.resource.data.createdAt == request.time;
+    }
+  }
+}

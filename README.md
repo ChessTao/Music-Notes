@@ -1,25 +1,17 @@
 # Учим ноты
 
-Маленькое онлайн-приложение для тренировки чтения нот. Фронтенд открывается в браузере, а профили, сессии, комнаты и результаты хранятся через серверный API.
+Браузерная игра для тренировки чтения нот. Онлайн-часть работает через Firebase:
 
-## Архитектура
-
-```text
-browser SPA
-  -> /api/...
-Node.js server
-  -> server-storage.js
-PostgreSQL через DATABASE_URL
-  или .runtime JSON fallback для разработки
-```
-
-Фронт отвечает за интерфейс и игру. Он не является главной памятью приложения. `localStorage` используется только как локальный кэш таблицы лидеров и fallback для гостевого режима.
+- Firebase Hosting отдает статический фронт;
+- Firebase Auth хранит регистрацию и вход по email/password;
+- Firestore хранит профили и таблицу лидеров;
+- `localStorage` используется только как локальный fallback.
 
 ## Локальный запуск
 
 ```powershell
 npm.cmd install
-npm.cmd start
+npm.cmd run dev
 ```
 
 Открыть:
@@ -28,101 +20,46 @@ npm.cmd start
 http://127.0.0.1:4173/
 ```
 
-Без `DATABASE_URL` сервер хранит данные в `.runtime/app-store.json`.
-
 ## Проверки
 
 ```powershell
 npm.cmd run check
-npm.cmd run online-smoke
 ```
 
-Health endpoint:
+## Настройка Firebase
 
-```text
-http://127.0.0.1:4173/api/health
-```
+1. Создать проект в Firebase Console.
+2. Включить Authentication → Email/Password.
+3. Включить Firestore Database.
+4. Включить Hosting.
+5. В Project settings → Web app скопировать Firebase config.
+6. Вставить config в [src/config.js](src/config.js).
+7. Скопировать `.firebaserc.example` в `.firebaserc` и заменить `YOUR_FIREBASE_PROJECT_ID`.
 
-Ожидаемый ответ содержит:
+Пока в [src/config.js](src/config.js) стоят `PASTE_...`, онлайн-вход и Firestore выключены, игра работает локально.
 
-```json
-{"ok":true}
-```
-
-## PostgreSQL
-
-В production задается:
-
-```text
-DATABASE_URL=postgres://user:password@host:5432/dbname
-COOKIE_SECURE=true
-```
-
-Для локального HTTP-запуска `COOKIE_SECURE` можно оставить `false` или не задавать.
-
-Если переменная есть, `server-storage.js` использует PostgreSQL и создает таблицы:
-
-```sql
-app_store (
-  key text primary key,
-  data jsonb not null,
-  updated_at timestamptz not null
-)
-
-server_errors (
-  id bigserial primary key,
-  created_at timestamptz not null,
-  scope text,
-  message text,
-  stack text,
-  context jsonb
-)
-```
-
-`app_store` хранит блоки `profiles`, `sessions`, `online_rooms`, `leaderboard_results`.
-
-## Docker Compose
-
-Production-подобный запуск:
+## Деплой
 
 ```powershell
-docker compose up --build
+firebase login
+firebase deploy
 ```
 
-Состав:
+В репозитории уже есть:
 
-- `app` — Node.js приложение;
-- `postgres` — база данных;
-- `postgres-data` — постоянный volume для данных.
+- [firebase.json](firebase.json)
+- [firestore.rules](firestore.rules)
+- [firestore.indexes.json](firestore.indexes.json)
 
-## API
+## Проверка после деплоя
 
-- `GET /api/health`
-- `POST /api/register`
-- `POST /api/login`
-- `POST /api/logout`
-- `GET /api/session`
-- `GET /api/profile`
-- `PUT /api/profile`
-- `GET /api/leaderboard`
-- `POST /api/results`
-- `GET /api/rooms`
-- `POST /api/rooms`
-- `POST /api/rooms/:id/join`
-- `GET /api/errors`
+- сайт открывается по Firebase Hosting URL;
+- регистрация через email/password работает;
+- вход работает после обновления страницы;
+- результат игры сохраняется в Firestore;
+- таблица лидеров загружается из Firestore;
+- все четыре уровня запускаются.
 
-В production `/api/errors` требует `ERROR_VIEW_TOKEN` и заголовок `x-error-view-token` или query `?token=...`.
+## Важное ограничение
 
-## Готовность к онлайну
-
-Перед публичной ссылкой проверить:
-
-- `npm.cmd run check`
-- `npm.cmd run online-smoke`
-- сайт открывается по HTTPS;
-- регистрация и вход работают;
-- профиль восстанавливается после обновления страницы;
-- результат появляется в таблице лидеров;
-- после перезапуска сервера данные не исчезают;
-- при Docker-запуске данные живут в `postgres-data`;
-- `/api/health` возвращает `{"ok":true}`.
+Firebase-вариант не имеет собственного серверного валидатора результата. Защита основана на Firebase Auth и Firestore Rules. Для маленькой учебной игры этого достаточно как практичный онлайн-вариант, но при соревновательном публичном запуске честность лидерборда лучше усиливать Cloud Functions.

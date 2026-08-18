@@ -1,123 +1,105 @@
-# План выхода онлайн
+# План выхода онлайн через Firebase
 
-Цель: опубликовать игру как маленькое онлайн-приложение с серверным API, регистрацией, профилями, комнатами, результатами и PostgreSQL.
+Цель: опубликовать игру как Firebase-приложение без Render и PostgreSQL.
 
-## 1. Подготовить сервер
+## 1. Создать Firebase Project
 
-Проект запускается командой:
+В Firebase Console:
+
+1. Add project.
+2. Название, например `music-notes`.
+3. Google Analytics можно выключить.
+
+## 2. Включить Authentication
+
+1. Authentication.
+2. Get started.
+3. Sign-in method.
+4. Email/Password.
+5. Enable.
+
+## 3. Включить Firestore
+
+1. Firestore Database.
+2. Create database.
+3. Production mode.
+4. Region лучше выбрать европейский, если доступен.
+
+## 4. Добавить Web App
+
+В Project settings:
+
+1. Add app.
+2. Web app.
+3. Скопировать `firebaseConfig`.
+4. Вставить реальные значения в `src/config.js`.
+
+## 5. Настроить CLI
 
 ```powershell
-npm.cmd start
+npm.cmd install -g firebase-tools
+firebase login
 ```
 
-Сервер делает две вещи:
+Скопировать `.firebaserc.example` в `.firebaserc` и заменить:
 
-- отдает статические файлы фронта;
-- обслуживает API `/api/...`.
+```text
+YOUR_FIREBASE_PROJECT_ID
+```
 
-Проверка:
+на реальный Firebase project id.
+
+## 6. Проверить локально
 
 ```powershell
 npm.cmd run check
-npm.cmd start
-npm.cmd run online-smoke
+npm.cmd run dev
 ```
 
-## 2. Подключить базу данных
-
-В production задать:
+Открыть:
 
 ```text
-DATABASE_URL=postgres://user:password@host:5432/dbname
+http://127.0.0.1:4173/
 ```
 
-Если `DATABASE_URL` есть, приложение использует PostgreSQL.
+Проверить:
 
-Если `DATABASE_URL` нет, приложение использует локальный fallback:
+- регистрация через email/password;
+- вход;
+- игра;
+- сохранение результата;
+- загрузка таблицы лидеров.
 
-```text
-.runtime/app-store.json
-```
-
-Локальные JSON-файлы допустимы только для разработки.
-
-## 3. Проверить Docker Compose
-
-Production-подобная схема:
+## 7. Деплой
 
 ```powershell
-docker compose up --build
+firebase deploy
 ```
 
-Сервисы:
+Команда опубликует:
 
-- `app` — Node.js приложение;
-- `postgres` — PostgreSQL;
-- `postgres-data` — постоянный volume.
+- Firebase Hosting;
+- Firestore Rules;
+- Firestore Indexes.
 
-Важно: данные должны жить в volume, а не во временной файловой системе контейнера.
+## 8. Проверка публичного URL
 
-## 4. Выбрать хостинг
-
-Нужен хостинг, который умеет запускать Node.js сервер и подключать PostgreSQL:
-
-- Render
-- Railway
-- Fly.io
-- DigitalOcean App Platform
-- VPS
-- любой Docker-хостинг
-
-GitHub Pages для этой архитектуры не подходит, потому что это только статический хостинг без Node API и базы.
-
-## 5. Настроить переменные окружения
-
-Минимум:
-
-```text
-NODE_ENV=production
-HOST=0.0.0.0
-PORT=4173
-DATABASE_URL=postgres://...
-ERROR_VIEW_TOKEN=<long-random-token>
-COOKIE_SECURE=true
-```
-
-Для HTTPS обычно используется reverse proxy или HTTPS, встроенный в платформу деплоя.
-
-## 6. Проверить публичный URL
-
-После деплоя открыть:
-
-```text
-https://domain.com/api/health
-```
-
-Ожидаемый ответ:
-
-```json
-{"ok":true}
-```
-
-Затем проверить в браузере:
+После деплоя открыть Hosting URL и проверить:
 
 - сайт открывается по HTTPS;
+- нет битой кодировки;
 - регистрация работает;
-- вход работает;
-- профиль сохраняется после обновления страницы;
-- все четыре уровня запускаются;
-- результат отправляется через `/api/results`;
-- таблица лидеров читается через `/api/leaderboard`;
-- комнаты создаются через `/api/rooms`;
-- после перезапуска сервера данные остаются;
-- `/api/errors` позволяет увидеть серверные ошибки.
+- вход восстанавливается после обновления страницы;
+- результат попадает в Firestore;
+- таблица лидеров показывает онлайн-результаты;
+- все четыре уровня игры доступны.
 
-## 7. Минимальный критерий готовности
+## 9. Если появится ошибка индекса
 
-Проект готов к нормальному онлайну, когда:
+Если Firestore пожалуется на индекс, он даст ссылку на создание индекса. Но основной индекс уже описан в `firestore.indexes.json`:
 
-- `npm.cmd run check` проходит без ошибок;
-- `npm.cmd run online-smoke` проходит против локального или публичного URL;
-- `DATABASE_URL` подключен к постоянной PostgreSQL;
-- публичный URL работает по HTTPS;
-- регистрация, вход, профиль, комнаты и лидерборд переживают перезапуск сервера.
+```text
+leaders: level ASC, score DESC, date ASC
+```
+
+После `firebase deploy` он должен быть создан автоматически.

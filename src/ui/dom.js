@@ -26,6 +26,7 @@ export function getDomElements() {
       homeGrid: getRequiredElement('homeGrid'),
       leadersArea: getRequiredElement('leadersArea'),
       playerName: getRequiredElement('playerName'),
+      playerEmail: getRequiredElement('playerEmail'),
       playerPassword: getRequiredElement('playerPassword'),
       loginBtn: getRequiredElement('loginBtn'),
       registerBtn: getRequiredElement('registerBtn'),
